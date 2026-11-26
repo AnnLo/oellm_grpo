@@ -36,9 +36,9 @@ python -m verl.trainer.main_ppo \
   data.val_files=$DIR/data/intellect3/test.parquet \
   data.train_batch_size=32 \
   data.max_prompt_length=1024 \
-  data.max_response_length=4096 \
+  data.max_response_length=16000 \
   data.filter_overlong_prompts=True \
-  +data.apply_chat_template_kwargs.enable_thinking=False \
+  +data.apply_chat_template_kwargs.enable_thinking=True \
   actor_rollout_ref.model.path=$MODEL \
   actor_rollout_ref.model.use_remove_padding=True \
   actor_rollout_ref.model.enable_gradient_checkpointing=True \
@@ -55,7 +55,7 @@ python -m verl.trainer.main_ppo \
   actor_rollout_ref.rollout.n=8 \
   actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
   actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
-  actor_rollout_ref.rollout.max_model_len=5120 \
+  actor_rollout_ref.rollout.max_model_len=16000 \
   actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
   actor_rollout_ref.rollout.val_kwargs.n=4 \
   actor_rollout_ref.rollout.val_kwargs.do_sample=True \
