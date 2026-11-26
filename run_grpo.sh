@@ -2,14 +2,16 @@
 #SBATCH --job-name=oellm-grpo
 #SBATCH --account=AIFAC_F02_352
 #SBATCH --partition=boost_usr_prod
-#SBATCH --nodes=1
+#SBATCH --nodes=4
+#SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=480G
 #SBATCH --time=24:00:00
 #SBATCH --output=logs/%x-%j.out
 # GRPO with upstream verl on INTELLECT-3-RL (math, science, code, logic).
-# Usage: sbatch run_grpo.sh [hydra overrides]. Resubmitting with the same EXPERIMENT resumes from the last checkpoint.
+# Usage: sbatch run_grpo.sh [hydra overrides]. Resubmitting with the same EXPERIMENT resumes from the last checkpoint
+# (on the same number of nodes: checkpoints are saved per GPU).
 set -euo pipefail
 
 BASE=/leonardo_work/AIFAC_F02_352/anna
@@ -29,6 +31,17 @@ export WANDB_MODE=offline WANDB_DIR=$DIR/logs/$EXPERIMENT WANDB_API_KEY=$(cat ~/
 unset ROCR_VISIBLE_DEVICES   # set by Slurm; verl refuses it next to CUDA_VISIBLE_DEVICES
 # flash-attn is self-built (build_flashattn.sh): verl's prebuilt wheel needs a newer glibc than Leonardo has
 
+
+# Ray cluster over all nodes: head on this node, one worker on each other node
+HEAD=$(hostname)
+ray start --head --port=6379 --num-cpus=$SLURM_CPUS_PER_TASK --num-gpus=4
+if [ "$SLURM_NNODES" -gt 1 ]; then
+  srun --nodes=$((SLURM_NNODES - 1)) --ntasks-per-node=1 --exclude=$HEAD --gres=gpu:4 --cpus-per-task=$SLURM_CPUS_PER_TASK \
+    bash -c "unset ROCR_VISIBLE_DEVICES; ray start --address=$HEAD:6379 --num-cpus=$SLURM_CPUS_PER_TASK --num-gpus=4 --block" &
+  sleep 30
+fi
+export RAY_ADDRESS=$HEAD:6379
+
 python -m verl.trainer.main_ppo \
   algorithm.adv_estimator=grpo \
   algorithm.use_kl_in_reward=False \
@@ -45,6 +58,7 @@ python -m verl.trainer.main_ppo \
   actor_rollout_ref.actor.optim.lr=1e-6 \
   actor_rollout_ref.actor.ppo_mini_batch_size=8 \
   actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
+  actor_rollout_ref.actor.use_dynamic_bsz=True \
   actor_rollout_ref.actor.use_kl_loss=False \
   actor_rollout_ref.actor.entropy_coeff=0 \
   actor_rollout_ref.actor.fsdp_config.param_offload=True \
@@ -57,6 +71,7 @@ python -m verl.trainer.main_ppo \
   actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
   actor_rollout_ref.rollout.max_model_len=5120 \
   actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
+  actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=True \
   actor_rollout_ref.rollout.val_kwargs.n=4 \
   actor_rollout_ref.rollout.val_kwargs.do_sample=True \
   actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
@@ -66,7 +81,7 @@ python -m verl.trainer.main_ppo \
   trainer.project_name=oellm-grpo \
   trainer.experiment_name=$EXPERIMENT \
   trainer.n_gpus_per_node=4 \
-  trainer.nnodes=1 \
+  trainer.nnodes=$SLURM_NNODES \
   trainer.total_training_steps=300 \
   trainer.val_before_train=True \
   trainer.test_freq=25 \
@@ -74,5 +89,5 @@ python -m verl.trainer.main_ppo \
   trainer.max_actor_ckpt_to_keep=2 \
   trainer.resume_mode=auto \
   trainer.default_local_dir=$DIR/checkpoints/$EXPERIMENT \
-  ray_kwargs.ray_init.num_cpus=$SLURM_CPUS_PER_TASK \
   "$@"
+ray stop
