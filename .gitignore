@@ -2,4 +2,6 @@ data/
 logs/
 checkpoints/
 outputs/
+cache/
+*.out
 __pycache__/
