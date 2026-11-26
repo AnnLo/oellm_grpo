@@ -34,4 +34,4 @@ To resume after time limit, submit again with the same `EXPERIMENT`.
 ## TODO
 
 - Set up wandb logging
-- Add a reward function for the logic subset (currently left out of the data)
+- For later, add a reward function for the logic subset (currently left out of the data)
