@@ -31,7 +31,22 @@ EXPERIMENT=my_run sbatch run_grpo.sh
 
 To resume after time limit, submit again with the same `EXPERIMENT`.
 
+## wandb
+
+Training logs to wandb offline. Put your wandb API key in your home folder once:
+
+```bash
+echo <your key> > ~/.wandb_api_key && chmod 600 ~/.wandb_api_key
+```
+
+Then, after submitting a run, start the upload job, which syncs `logs/` to the wandb project `oellm-grpo` every 10 minutes:
+
+```bash
+sbatch wandb_sync.sh
+```
+
+Stop it with `scancel -n wandb-sync-grpo`.
+
 ## TODO
 
-- Set up wandb logging
 - For later, add a reward function for the logic subset (currently left out of the data)
