@@ -33,10 +33,12 @@ unset ROCR_VISIBLE_DEVICES   # set by Slurm; verl refuses it next to CUDA_VISIBL
 
 
 # Ray cluster over all nodes: head on this node, one worker on each other node
-HEAD=$(hostname)
+NODES=($(scontrol show hostnames $SLURM_JOB_NODELIST))   # Slurm's node names; this script runs on the first
+HEAD=${NODES[0]}
+WORKERS=$(IFS=,; echo "${NODES[*]:1}")
 ray start --head --port=6379 --num-cpus=$SLURM_CPUS_PER_TASK --num-gpus=4
 if [ "$SLURM_NNODES" -gt 1 ]; then
-  srun --nodes=$((SLURM_NNODES - 1)) --ntasks-per-node=1 --exclude=$HEAD --gres=gpu:4 --cpus-per-task=$SLURM_CPUS_PER_TASK \
+  srun --nodes=$((SLURM_NNODES - 1)) --ntasks-per-node=1 --nodelist=$WORKERS --gres=gpu:4 --cpus-per-task=$SLURM_CPUS_PER_TASK \
     bash -c "unset ROCR_VISIBLE_DEVICES; ray start --address=$HEAD:6379 --num-cpus=$SLURM_CPUS_PER_TASK --num-gpus=4 --block" &
   sleep 30
 fi
@@ -89,5 +91,7 @@ python -m verl.trainer.main_ppo \
   trainer.max_actor_ckpt_to_keep=2 \
   trainer.resume_mode=auto \
   trainer.default_local_dir=$DIR/checkpoints/$EXPERIMENT \
+  trainer.rollout_data_dir=$DIR/logs/$EXPERIMENT/rollouts \
+  trainer.validation_data_dir=$DIR/logs/$EXPERIMENT/validation \
   "$@"
 ray stop
